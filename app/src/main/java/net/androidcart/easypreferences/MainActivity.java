@@ -25,6 +25,7 @@ public class MainActivity extends AppCompatActivity {
 
         MyApplication.getComponent().inject(this);
 
+
         
         Log.d("DILog , str " , "\n" + prefs.getStr() );
         prefs.setStr("test");
