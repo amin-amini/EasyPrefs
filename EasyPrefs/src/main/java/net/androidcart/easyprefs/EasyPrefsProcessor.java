@@ -11,9 +11,6 @@ import com.squareup.javapoet.TypeSpec;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -27,17 +24,12 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.MirroredTypeException;
-import javax.lang.model.type.TypeKind;
-import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 
 public class EasyPrefsProcessor extends AbstractProcessor {
 
-    ProcessingEnvironment pe;
     private Filer filer;
     private Messager messager;
     private Elements elements;
@@ -45,10 +37,9 @@ public class EasyPrefsProcessor extends AbstractProcessor {
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
-        pe = processingEnv;
-        filer = pe.getFiler();
-        messager = pe.getMessager();
-        elements = pe.getElementUtils();
+        filer = processingEnv.getFiler();
+        messager = processingEnv.getMessager();
+        elements = processingEnv.getElementUtils();
     }
 
     private ClassName context(){
@@ -57,9 +48,7 @@ public class EasyPrefsProcessor extends AbstractProcessor {
     private ClassName prefs(){
         return ClassName.get("android.content", "SharedPreferences");
     }
-    private ClassName prefsManager(){
-        return ClassName.get("android.preference", "PreferenceManager");
-    }
+
 
     private boolean isAbstract(Element e){
         for ( Modifier mod : e.getModifiers()){
@@ -77,7 +66,7 @@ public class EasyPrefsProcessor extends AbstractProcessor {
         return (DeclaredType) method.getReturnType();
     }
 
-    String getCamel(String in){
+    private String getCamel(String in){
         String typeCamel = in;
         if ( typeCamel.length()>1 ) {
             typeCamel = typeCamel.substring(0, 1).toUpperCase() + typeCamel.substring(1);
@@ -244,7 +233,6 @@ public class EasyPrefsProcessor extends AbstractProcessor {
 
 
     private MethodSpec deleteMethod(ExecutableElement method){
-        TypeName retTN = returnType(method);
         String itemName = method.getSimpleName().toString();
         String itemNameQuoted = "\"" + itemName + "\"";
         String getterName = "delete" +  getCamel(itemName);

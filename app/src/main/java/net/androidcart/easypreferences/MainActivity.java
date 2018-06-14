@@ -1,16 +1,10 @@
 package net.androidcart.easypreferences;
 
-import android.app.Application;
-import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 
-import com.google.gson.Gson;
-
-import net.androidcart.easypreferences.di.components.AppComponent;
-
 import java.util.ArrayList;
-import java.util.HashMap;
 
 import javax.inject.Inject;
 
