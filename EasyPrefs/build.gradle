@@ -1,6 +1,7 @@
 apply plugin: 'java-library'
 apply plugin: 'maven'
-group = 'com.github.amin-amini'
+group = 'com.github.amin-amini.processor'
+
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
