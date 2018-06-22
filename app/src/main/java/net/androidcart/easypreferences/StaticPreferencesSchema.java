@@ -1,6 +1,6 @@
 package net.androidcart.easypreferences;
 
-import net.androidcart.easyprefs.EasyPrefsSchema;
+import net.androidcart.easyprefsschema.EasyPrefsSchema;
 
 import java.util.ArrayList;
 

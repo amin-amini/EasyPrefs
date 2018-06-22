@@ -4,12 +4,7 @@ group = 'com.github.amin-amini'
 
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation 'com.google.code.gson:gson:2.8.2'
 
-    compile 'com.google.guava:guava:21.0'
-    compile 'com.squareup:javapoet:1.8.0'
-
-    implementation project(':EasyPrefsSchema')
 }
 
 sourceCompatibility = "1.7"

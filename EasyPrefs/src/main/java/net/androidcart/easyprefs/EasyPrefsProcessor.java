@@ -9,6 +9,8 @@ import com.squareup.javapoet.MethodSpec;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 
+import net.androidcart.easyprefsschema.EasyPrefsSchema;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Set;

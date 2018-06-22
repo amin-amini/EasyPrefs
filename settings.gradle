@@ -1,1 +1,1 @@
-include ':app', ':EasyPrefs'
+include ':app', ':EasyPrefs', ':EasyPrefsSchema'
