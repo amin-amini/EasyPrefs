@@ -18,8 +18,8 @@ It allows you to create facade layers for different shared preferences with few 
 * Add the dependency in your app build.gradle
 	```gradle
   dependencies {
-      implementation 'com.github.amin-amini:EasyPrefs:1.0.0'
-      annotationProcessor 'com.github.amin-amini:EasyPrefs:1.0.0'
+      implementation 'com.github.amin-amini.EasyPrefs:EasyPrefsSchema:1.0.1'
+      annotationProcessor 'com.github.amin-amini.EasyPrefs:EasyPrefs:1.0.1'
   }
 	```
 
