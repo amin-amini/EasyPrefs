@@ -3,8 +3,12 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/EasyPreferences.iml" filepath="$PROJECT_DIR$/EasyPreferences.iml" />
+      <module fileurl="file://$PROJECT_DIR$/EasyPrefs.iml" filepath="$PROJECT_DIR$/EasyPrefs.iml" />
       <module fileurl="file://$PROJECT_DIR$/EasyPrefs/EasyPrefs.iml" filepath="$PROJECT_DIR$/EasyPrefs/EasyPrefs.iml" />
+      <module fileurl="file://$PROJECT_DIR$/EasyPrefs/EasyPrefs-EasyPrefs.iml" filepath="$PROJECT_DIR$/EasyPrefs/EasyPrefs-EasyPrefs.iml" />
       <module fileurl="file://$PROJECT_DIR$/EasyPrefsSchema/EasyPrefsSchema.iml" filepath="$PROJECT_DIR$/EasyPrefsSchema/EasyPrefsSchema.iml" />
+      <module fileurl="file://$PROJECT_DIR$/EasyPrefsSchema/EasyPrefsSchema.iml" filepath="$PROJECT_DIR$/EasyPrefsSchema/EasyPrefsSchema.iml" />
+      <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
       <module fileurl="file://$PROJECT_DIR$/app/app.iml" filepath="$PROJECT_DIR$/app/app.iml" />
     </modules>
   </component>

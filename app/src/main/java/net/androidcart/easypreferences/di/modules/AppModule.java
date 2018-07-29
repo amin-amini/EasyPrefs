@@ -6,7 +6,11 @@ package net.androidcart.easypreferences.di.modules;
 
 import android.app.Application;
 
+import com.google.gson.reflect.TypeToken;
+
+import net.androidcart.easypreferences.GenericPreferences;
 import net.androidcart.easypreferences.MyPreferences;
+import net.androidcart.easypreferences.Test;
 
 import javax.inject.Singleton;
 
@@ -32,6 +36,15 @@ public class AppModule {
     // Application reference must come from AppModule.class
     MyPreferences providesSharedPreferences(Application application) {
         return new MyPreferences(application);
+    }
+
+    @Provides
+    @Singleton
+        // Application reference must come from AppModule.class
+    GenericPreferences<Test,String> providesStringPreferences(Application application) {
+        return new GenericPreferences<>(application,
+                new TypeToken<Test>(){},
+                new TypeToken<String>(){});
     }
 
 }

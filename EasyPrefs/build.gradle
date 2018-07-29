@@ -9,6 +9,9 @@ dependencies {
     compile 'com.google.guava:guava:21.0'
     compile 'com.squareup:javapoet:1.8.0'
 
+    compile 'org.apache.commons:commons-lang3:3.0'
+
+
     implementation project(':EasyPrefsSchema')
 }
 

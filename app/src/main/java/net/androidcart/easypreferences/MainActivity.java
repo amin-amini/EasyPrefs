@@ -4,6 +4,9 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 
+import com.google.gson.reflect.TypeToken;
+
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 
 import javax.inject.Inject;
@@ -11,6 +14,7 @@ import javax.inject.Inject;
 public class MainActivity extends AppCompatActivity {
 
     @Inject MyPreferences prefs;
+    @Inject GenericPreferences<Test, String> testPrefs;
     
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,6 +39,15 @@ public class MainActivity extends AppCompatActivity {
         prefs.setTestDouble(Double.MAX_VALUE);
         Log.d("DILog , double " , "" + prefs.getTestDouble() );
         prefs.deleteTestDouble();
+
+
+        Type asd = new TypeToken<Integer>() {
+        }.getType();
+
+        Log.d("DILog , test generic " , "\n" + testPrefs.getGeneric(1,"asd") );
+        testPrefs.setGeneric(1,"asd", new Test());
+        Log.d("DILog , test generic " , "" + testPrefs.getGeneric(1,"asd") );
+        testPrefs.deleteGeneric(1,"asd");
 
 
         //NOTE: static version have been initialized in MyApplication -> onCreate

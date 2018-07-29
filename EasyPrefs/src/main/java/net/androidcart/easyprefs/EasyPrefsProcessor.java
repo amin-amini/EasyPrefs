@@ -6,13 +6,18 @@ import com.squareup.javapoet.ClassName;
 import com.squareup.javapoet.FieldSpec;
 import com.squareup.javapoet.JavaFile;
 import com.squareup.javapoet.MethodSpec;
+import com.squareup.javapoet.ParameterizedTypeName;
 import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
+import com.squareup.javapoet.TypeVariableName;
 
 import net.androidcart.easyprefsschema.EasyPrefsSchema;
 
+import org.apache.commons.lang3.StringUtils;
+
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -26,11 +31,15 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.TypeParameterElement;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.util.Elements;
 import javax.tools.Diagnostic;
 
 public class EasyPrefsProcessor extends AbstractProcessor {
+
+    static final String PARAM_SEPERATOR = "___";
 
     private Filer filer;
     private Messager messager;
@@ -44,8 +53,18 @@ public class EasyPrefsProcessor extends AbstractProcessor {
         elements = processingEnv.getElementUtils();
     }
 
+    private void log(String str){
+        messager.printMessage(Diagnostic.Kind.NOTE, "EasyPrefsLog: " + str );
+    }
+    private void error(String str){
+        messager.printMessage(Diagnostic.Kind.ERROR, "EasyPrefsError: " + str );
+    }
+
     private ClassName context(){
         return ClassName.get("android.content", "Context");
+    }
+    private ClassName gsonTypeToken(){
+        return ClassName.get("com.google.gson.reflect", "TypeToken");
     }
     private ClassName prefs(){
         return ClassName.get("android.content", "SharedPreferences");
@@ -65,7 +84,10 @@ public class EasyPrefsProcessor extends AbstractProcessor {
         return TypeName.get(method.getReturnType()).withoutAnnotations();
     }
     private DeclaredType returnDeclared(ExecutableElement method){
-        return (DeclaredType) method.getReturnType();
+        try {
+            return (DeclaredType) method.getReturnType();
+        }catch (Throwable ignored){}
+        return null;
     }
 
     private String getCamel(String in){
@@ -110,11 +132,35 @@ public class EasyPrefsProcessor extends AbstractProcessor {
         return "return null";
     }
 
-    private MethodSpec getMethod(ExecutableElement method){
+    private MethodSpec defaultMethod(ExecutableElement method){
+        String name = method.getSimpleName().toString();
+        MethodSpec.Builder builder = MethodSpec.methodBuilder(name)
+                .returns(returnType(method))
+                .addAnnotation(Override.class)
+                .addStatement( getDefaultStatement(method) );
+
+        for( VariableElement ve : method.getParameters() ){
+            builder.addParameter(TypeName.get(ve.asType()), ve.getSimpleName().toString());
+        }
+        return builder.build();
+    }
+
+    private MethodSpec getMethod(ExecutableElement method, List<? extends TypeParameterElement> typeParameters){
         TypeName retTN = returnType(method);
         String itemName = method.getSimpleName().toString();
-        String defaultCall = itemName + "()";
-        String itemNameQuoted = "\"" + itemName + "\"";
+
+
+        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + itemName + "\"");
+
+        ArrayList<String> params = new ArrayList<>();
+        for( VariableElement ve : method.getParameters() ){
+            String name = ve.getSimpleName().toString();
+            params.add(name);
+            itemNameQuotedBuilder.append(" + \""+PARAM_SEPERATOR+"\" + ").append(name);
+        }
+
+        String itemNameQuoted = itemNameQuotedBuilder.toString();
+        String defaultCall = itemName + "("+ StringUtils.join(params,",")+")";
         String getterName = (retTN.equals(TypeName.BOOLEAN) ? "is" : "get") +  getCamel(itemName);
 
         MethodSpec.Builder builder = MethodSpec.methodBuilder(getterName)
@@ -122,6 +168,9 @@ public class EasyPrefsProcessor extends AbstractProcessor {
                 .returns(retTN)
                 .beginControlFlow("if( doesKeyExistsInternal("+itemNameQuoted+") )")
                 ;
+        for( VariableElement ve : method.getParameters() ){
+            builder.addParameter(TypeName.get(ve.asType()), ve.getSimpleName().toString());
+        }
 
         String fullTypeName = retTN.withoutAnnotations().toString();
 
@@ -159,7 +208,25 @@ public class EasyPrefsProcessor extends AbstractProcessor {
             builder.beginControlFlow("try");
             builder.addStatement("String serializedStr = mSharedPreferences.getString(" + itemNameQuoted + ",null)");
 
-            if (returnDeclared(method).getTypeArguments().size() > 0) {
+            DeclaredType returnDeclaredType = returnDeclared(method);
+            if (returnDeclaredType == null) {
+                boolean couldUseTypeToken = false;
+                for(TypeParameterElement tp : typeParameters){
+                    TypeName tn = TypeName.get(tp.asType());
+                    if (tn.equals(retTN)){
+                        String attributeName = "typeTokenFor" + tp.getSimpleName().toString();
+
+                        builder.addStatement(String.format("return gson.fromJson(serializedStr, %s.getType() )", attributeName));
+                        couldUseTypeToken = true;
+                        break;
+                    }
+                }
+
+                if (!couldUseTypeToken){
+                    //TODO: make sure
+                    //builder.addStatement(String.format("return gson.fromJson(serializedStr, new com.google.gson.reflect.TypeToken< %s >(){}.getType() )", fullTypeName));
+                }
+            } else if (returnDeclaredType.getTypeArguments().size() > 0) {
                 builder.addStatement(String.format("return gson.fromJson(serializedStr, new com.google.gson.reflect.TypeToken< %s >(){}.getType() )", fullTypeName));
             } else {
                 builder.addStatement(String.format("return gson.fromJson(serializedStr, %s.class )", fullTypeName));
@@ -177,15 +244,27 @@ public class EasyPrefsProcessor extends AbstractProcessor {
     private MethodSpec setMethod(ExecutableElement method){
         TypeName retTN = returnType(method);
         String itemName = method.getSimpleName().toString();
-        String itemNameQuoted = "\"" + itemName + "\"";
-        String getterName = "set" +  getCamel(itemName);
 
-        MethodSpec.Builder builder = MethodSpec.methodBuilder(getterName)
+        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + itemName + "\"");
+        for( VariableElement ve : method.getParameters() ){
+            String name = ve.getSimpleName().toString();
+            itemNameQuotedBuilder.append(" + \""+PARAM_SEPERATOR+"\" + ").append(name);
+        }
+        String itemNameQuoted = itemNameQuotedBuilder.toString();
+
+        String setterName = "set" +  getCamel(itemName);
+
+        MethodSpec.Builder builder = MethodSpec.methodBuilder(setterName)
                 .addModifiers(Modifier.PUBLIC)
                 .addModifiers(Modifier.SYNCHRONIZED)
-                .addParameter(retTN, itemName)
                 .addStatement("SharedPreferences.Editor editor = mSharedPreferences.edit()")
                 ;
+
+        for( VariableElement ve : method.getParameters() ){
+            builder.addParameter(TypeName.get(ve.asType()), ve.getSimpleName().toString());
+        }
+
+        builder.addParameter(retTN, itemName);
 
         String fullTypeName = retTN.withoutAnnotations().toString();
 
@@ -235,8 +314,16 @@ public class EasyPrefsProcessor extends AbstractProcessor {
 
 
     private MethodSpec deleteMethod(ExecutableElement method){
+        TypeName retTN = returnType(method);
         String itemName = method.getSimpleName().toString();
-        String itemNameQuoted = "\"" + itemName + "\"";
+
+        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + itemName + "\"");
+        for( VariableElement ve : method.getParameters() ){
+            String name = ve.getSimpleName().toString();
+            itemNameQuotedBuilder.append(" + \""+PARAM_SEPERATOR+"\" + ").append(name);
+        }
+        String itemNameQuoted = itemNameQuotedBuilder.toString();
+
         String getterName = "delete" +  getCamel(itemName);
 
         MethodSpec.Builder builder = MethodSpec.methodBuilder(getterName)
@@ -252,6 +339,36 @@ public class EasyPrefsProcessor extends AbstractProcessor {
                 .addStatement("return false")
                 ;
 
+        for( VariableElement ve : method.getParameters() ){
+            builder.addParameter(TypeName.get(ve.asType()), ve.getSimpleName().toString());
+        }
+        return builder.build();
+    }
+
+
+    private MethodSpec existsMethod(ExecutableElement method){
+        TypeName retTN = returnType(method);
+        String itemName = method.getSimpleName().toString();
+
+        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + itemName + "\"");
+        for( VariableElement ve : method.getParameters() ){
+            String name = ve.getSimpleName().toString();
+            itemNameQuotedBuilder.append(" + \""+PARAM_SEPERATOR+"\" + ").append(name);
+        }
+        String itemNameQuoted = itemNameQuotedBuilder.toString();
+
+        String getterName = "has" +  getCamel(itemName);
+
+        MethodSpec.Builder builder = MethodSpec.methodBuilder(getterName)
+                .returns(TypeName.BOOLEAN)
+                .addModifiers(Modifier.PUBLIC)
+                .addModifiers(Modifier.SYNCHRONIZED)
+                .addStatement("return doesKeyExistsInternal("+itemNameQuoted+")")
+                ;
+
+        for( VariableElement ve : method.getParameters() ){
+            builder.addParameter(TypeName.get(ve.asType()), ve.getSimpleName().toString());
+        }
         return builder.build();
     }
 
@@ -271,11 +388,11 @@ public class EasyPrefsProcessor extends AbstractProcessor {
             String prefsClassName = annot.value();
             boolean useStatic = annot.useStaticReferences();
             if (prefsClassName.length()==0){
-                messager.printMessage(Diagnostic.Kind.ERROR, "Your EasyPrefs schema must provide preferences class name!" );
+                error( "Your EasyPrefs schema must provide preferences class name!" );
                 return false;
             }
             if (schemaNames.contains(prefsClassName)){
-                messager.printMessage(Diagnostic.Kind.ERROR, String.format("You have used same names (%s) for different preferences!" , prefsClassName) );
+                error( String.format("You have used same names (%s) for different preferences!" , prefsClassName) );
                 return false;
             }
             schemaNames.add(prefsClassName);
@@ -283,10 +400,22 @@ public class EasyPrefsProcessor extends AbstractProcessor {
             ClassName prefsCN = ClassName.get(packageName, prefsClassName);
 
 
+
             TypeSpec.Builder prefsClass = TypeSpec
                     .classBuilder( prefsCN )
                     .addModifiers(Modifier.PUBLIC)
                     .superclass(schema);
+
+            List<? extends TypeParameterElement> typeParameters = schemaTE.getTypeParameters();
+            if ( typeParameters != null){
+                for(TypeParameterElement tp : typeParameters){
+                    prefsClass.addTypeVariable(TypeVariableName.get(tp));
+                    if (useStatic){
+                        error( "Static EasyPrefs cannot be generic" );
+                        return false;
+                    }
+                }
+            }
 
             if(useStatic) {
                 prefsClass.addField(FieldSpec.builder(
@@ -306,12 +435,28 @@ public class EasyPrefsProcessor extends AbstractProcessor {
                     "gson",
                     Modifier.PRIVATE).build());
 
-            prefsClass.addMethod(MethodSpec.constructorBuilder()
-                    .addModifiers( useStatic ? Modifier.PRIVATE : Modifier.PUBLIC)
+            MethodSpec.Builder constructorBuilder = MethodSpec.constructorBuilder()
+                    .addModifiers(useStatic ? Modifier.PRIVATE : Modifier.PUBLIC)
                     .addParameter(context(), "context")
                     .addStatement(String.format("mSharedPreferences = context.getSharedPreferences(\"%s\", android.content.Context.MODE_PRIVATE)", prefsClassName))
-                    .addStatement("gson = new Gson()")
-                    .build());
+                    .addStatement("gson = new Gson()");
+
+            if ( typeParameters != null){
+                for(TypeParameterElement tp : typeParameters){
+                    String attributeName = "typeTokenFor" + tp.getSimpleName().toString();
+
+                    TypeName genType = ClassName.get(tp.asType());
+                    ParameterizedTypeName typeToken = ParameterizedTypeName.get(gsonTypeToken(), genType);
+
+                    prefsClass.addField(FieldSpec.builder(
+                            typeToken,
+                            attributeName,
+                            Modifier.PRIVATE).build());
+                    constructorBuilder.addParameter(typeToken , attributeName);
+                    constructorBuilder.addStatement("this." + attributeName + " = " + attributeName );
+                }
+            }
+            prefsClass.addMethod(constructorBuilder.build());
 
             if(useStatic) {
                 prefsClass.addMethod(MethodSpec.methodBuilder("init")
@@ -344,27 +489,24 @@ public class EasyPrefsProcessor extends AbstractProcessor {
                 }
                 String itemName = item.getSimpleName().toString();
                 ExecutableElement eMethod = (ExecutableElement) item;
-                if( eMethod.getParameters().size() > 0 ){
-                    messager.printMessage(Diagnostic.Kind.ERROR, "Your EasyPrefs schema methods cannot have parameters!" );
-                    return false;
-                }
+//                if( eMethod.getParameters().size() > 0 ){
+//                    error( "Your EasyPrefs schema methods cannot have parameters!" );
+//                    return false;
+//                }
 
                 if( returnType(eMethod).equals(TypeName.CHAR) ){
-                    messager.printMessage(Diagnostic.Kind.ERROR, "char type is not supported by EasyPrefs!" );
+                    error( "char type is not supported by EasyPrefs!" );
                     return false;
                 }
 
                 if (isAbstract(eMethod)){
-                    prefsClass.addMethod(MethodSpec.methodBuilder(itemName)
-                            .returns(returnType(eMethod))
-                            .addAnnotation(Override.class)
-                            .addStatement( getDefaultStatement(eMethod) )
-                            .build());
+                    prefsClass.addMethod(defaultMethod(eMethod));
                 }
 
-                prefsClass.addMethod(getMethod(eMethod));
+                prefsClass.addMethod(getMethod(eMethod, typeParameters));
                 prefsClass.addMethod(setMethod(eMethod));
                 prefsClass.addMethod(deleteMethod(eMethod));
+                prefsClass.addMethod(existsMethod(eMethod));
 
             }
 
