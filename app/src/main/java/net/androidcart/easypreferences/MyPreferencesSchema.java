@@ -1,6 +1,7 @@
 package net.androidcart.easypreferences;
 
 import net.androidcart.easyprefsschema.EasyPrefsSchema;
+import net.androidcart.easyprefsschema.EPItem;
 
 import java.util.ArrayList;
 import java.util.Map;
@@ -22,9 +23,15 @@ public abstract class MyPreferencesSchema {
     abstract Map<String, ArrayList<Test> > hugeMap();
 
     abstract boolean testBool();
-    int testInt(){return -10;}
+
+    @EPItem(key = "myCustomTestingKey" , expiresIn = 1000L)
+    int testInt(long helpId){return -10;}
+
     short testShort(){return -10;}
     long testLong(){return -1000;}
     float testFloat(){return -10000;}
     double testDouble(){return -10000;}
+
+    @EPItem(exclude = true)
+    void helperExcluding(){}
 }

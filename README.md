@@ -1,5 +1,6 @@
 
 
+
 # EasyPrefs - Simplest Android Shared Preferences
 
 EasyPrefs is an Android library based on Google's Gson fully compatible with Dagger that makes read/write on shared preferences so easy and enables you to store any kind of objects on shared preferences.
@@ -19,8 +20,8 @@ It allows you to create facade layers for different shared preferences with few 
 * Add the dependency in your app build.gradle
    ```gradle
   dependencies {
-      implementation 'com.github.amin-amini.EasyPrefs:EasyPrefsSchema:1.1.0'
-      annotationProcessor 'com.github.amin-amini.EasyPrefs:EasyPrefs:1.1.0'
+      implementation 'com.github.amin-amini.EasyPrefs:EasyPrefsSchema:1.2.0'
+      annotationProcessor 'com.github.amin-amini.EasyPrefs:EasyPrefs:1.2.0'
   }
    ```
 
@@ -190,6 +191,23 @@ Your schema can be generic so you can use it with generic types. but because thi
     }
     ```
 
+* **Customizations**
+Currently there are three customizations available.
+    1- expiry period (in milliseconds)
+    2- custom key in xml (mostly usable for compatibility for existing code)
+    3- excluding some personal methods (e.g. default helpers)
+    ```java
+    @EasyPrefsSchema("MyPreferences")
+    public abstract class MyPreferencesSchema {
+        @EPItem(key = "myCustomTestingKey" , expiresIn = 3600L*1000L) //expires in 1 hour
+        abstract AppConfig config();
+
+        @EPItem(exclude = true)
+        void DummyMethod(){...}
+    }
+    ```
+
+
 ## <b>NOTE: Once again I'm going to tell you that after any changes to your schema you have to rebuild your project (Build -> Rebuild Project) so EasyPrefs can regenerate required classes!</b>
 
-<b>Special thanks to @yehiahd for his great [FastSave-Android](https://github.com/yehiahd/FastSave-Android) which put the idea of developing EasyPrefs in my brain :smiley:</b>
+<b>Special thanks to @yehiahd for his great [FastSave-Android](https://github.com/yehiahd/FastSave-Android) which put the idea of developing EasyPrefs in my head :smiley:</b>

@@ -11,11 +11,13 @@ import com.squareup.javapoet.TypeName;
 import com.squareup.javapoet.TypeSpec;
 import com.squareup.javapoet.TypeVariableName;
 
+import net.androidcart.easyprefsschema.EPItem;
 import net.androidcart.easyprefsschema.EasyPrefsSchema;
 
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -39,7 +41,8 @@ import javax.tools.Diagnostic;
 
 public class EasyPrefsProcessor extends AbstractProcessor {
 
-    static final String PARAM_SEPERATOR = "___";
+    private static final String PARAM_SEPARATOR = "___";
+    private static final String TIME_HOLDER_PREFIX = "timeFor__";
 
     private Filer filer;
     private Messager messager;
@@ -145,18 +148,18 @@ public class EasyPrefsProcessor extends AbstractProcessor {
         return builder.build();
     }
 
-    private MethodSpec getMethod(ExecutableElement method, List<? extends TypeParameterElement> typeParameters){
+    private MethodSpec getMethod(ExecutableElement method, List<? extends TypeParameterElement> typeParameters, String prefsKey, long expiresIn){
         TypeName retTN = returnType(method);
         String itemName = method.getSimpleName().toString();
 
 
-        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + itemName + "\"");
+        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + prefsKey + "\"");
 
         ArrayList<String> params = new ArrayList<>();
         for( VariableElement ve : method.getParameters() ){
             String name = ve.getSimpleName().toString();
             params.add(name);
-            itemNameQuotedBuilder.append(" + \""+PARAM_SEPERATOR+"\" + ").append(name);
+            itemNameQuotedBuilder.append(" + \""+ PARAM_SEPARATOR +"\" + ").append(name);
         }
 
         String itemNameQuoted = itemNameQuotedBuilder.toString();
@@ -165,9 +168,15 @@ public class EasyPrefsProcessor extends AbstractProcessor {
 
         MethodSpec.Builder builder = MethodSpec.methodBuilder(getterName)
                 .addModifiers(Modifier.PUBLIC)
-                .returns(retTN)
-                .beginControlFlow("if( doesKeyExistsInternal("+itemNameQuoted+") )")
-                ;
+                .returns(retTN);
+
+        if(expiresIn>0){
+            builder.beginControlFlow("if (" +expiresIn + "L + mSharedPreferences.getLong(\""+TIME_HOLDER_PREFIX+"\" + "+itemNameQuoted+",0) < java.lang.System.currentTimeMillis())");
+                builder.addStatement("return " + defaultCall);
+            builder.endControlFlow();
+        }
+
+        builder.beginControlFlow("if( doesKeyExistsInternal("+itemNameQuoted+") )");
         for( VariableElement ve : method.getParameters() ){
             builder.addParameter(TypeName.get(ve.asType()), ve.getSimpleName().toString());
         }
@@ -241,14 +250,14 @@ public class EasyPrefsProcessor extends AbstractProcessor {
         return builder.build();
     }
 
-    private MethodSpec setMethod(ExecutableElement method){
+    private MethodSpec setMethod(ExecutableElement method, String prefsKey, long expiresIn){
         TypeName retTN = returnType(method);
         String itemName = method.getSimpleName().toString();
 
-        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + itemName + "\"");
+        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + prefsKey + "\"");
         for( VariableElement ve : method.getParameters() ){
             String name = ve.getSimpleName().toString();
-            itemNameQuotedBuilder.append(" + \""+PARAM_SEPERATOR+"\" + ").append(name);
+            itemNameQuotedBuilder.append(" + \""+ PARAM_SEPARATOR +"\" + ").append(name);
         }
         String itemNameQuoted = itemNameQuotedBuilder.toString();
 
@@ -308,19 +317,23 @@ public class EasyPrefsProcessor extends AbstractProcessor {
             builder.endControlFlow();
         }
 
+        if(expiresIn>0){
+            builder.addStatement("editor.putLong(\""+TIME_HOLDER_PREFIX+"\" + "+itemNameQuoted+", java.lang.System.currentTimeMillis())");
+        }
+
         builder.addStatement("editor.apply()");
         return builder.build();
     }
 
 
-    private MethodSpec deleteMethod(ExecutableElement method){
+    private MethodSpec deleteMethod(ExecutableElement method, String prefsKey, long expiresIn){
         TypeName retTN = returnType(method);
         String itemName = method.getSimpleName().toString();
 
-        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + itemName + "\"");
+        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + prefsKey + "\"");
         for( VariableElement ve : method.getParameters() ){
             String name = ve.getSimpleName().toString();
-            itemNameQuotedBuilder.append(" + \""+PARAM_SEPERATOR+"\" + ").append(name);
+            itemNameQuotedBuilder.append(" + \""+ PARAM_SEPARATOR +"\" + ").append(name);
         }
         String itemNameQuoted = itemNameQuotedBuilder.toString();
 
@@ -332,8 +345,11 @@ public class EasyPrefsProcessor extends AbstractProcessor {
                 .addModifiers(Modifier.SYNCHRONIZED)
                 .beginControlFlow("if( doesKeyExistsInternal("+itemNameQuoted+") )")
                     .addStatement("SharedPreferences.Editor editor = mSharedPreferences.edit()")
-                    .addStatement("editor.remove("+itemNameQuoted+")")
-                    .addStatement("editor.apply()")
+                    .addStatement("editor.remove("+itemNameQuoted+")");
+        if(expiresIn>0) {
+            builder.addStatement("editor.remove(" + "\"" + TIME_HOLDER_PREFIX + "\" + " + itemNameQuoted + ")");
+        }
+                    builder.addStatement("editor.apply()")
                     .addStatement("return true")
                 .endControlFlow()
                 .addStatement("return false")
@@ -346,14 +362,14 @@ public class EasyPrefsProcessor extends AbstractProcessor {
     }
 
 
-    private MethodSpec existsMethod(ExecutableElement method){
+    private MethodSpec existsMethod(ExecutableElement method, String prefsKey, long expiresIn){
         TypeName retTN = returnType(method);
         String itemName = method.getSimpleName().toString();
 
-        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + itemName + "\"");
+        StringBuilder itemNameQuotedBuilder = new StringBuilder("\"" + prefsKey + "\"");
         for( VariableElement ve : method.getParameters() ){
             String name = ve.getSimpleName().toString();
-            itemNameQuotedBuilder.append(" + \""+PARAM_SEPERATOR+"\" + ").append(name);
+            itemNameQuotedBuilder.append(" + \""+ PARAM_SEPARATOR +"\" + ").append(name);
         }
         String itemNameQuoted = itemNameQuotedBuilder.toString();
 
@@ -363,8 +379,15 @@ public class EasyPrefsProcessor extends AbstractProcessor {
                 .returns(TypeName.BOOLEAN)
                 .addModifiers(Modifier.PUBLIC)
                 .addModifiers(Modifier.SYNCHRONIZED)
-                .addStatement("return doesKeyExistsInternal("+itemNameQuoted+")")
                 ;
+
+        if(expiresIn>0){
+            builder.beginControlFlow("if (" +expiresIn + "L + mSharedPreferences.getLong(\""+TIME_HOLDER_PREFIX+"\" + "+itemNameQuoted+",0) < java.lang.System.currentTimeMillis())");
+                builder.addStatement("return false");
+            builder.endControlFlow();
+        }
+
+        builder.addStatement("return doesKeyExistsInternal("+itemNameQuoted+")");
 
         for( VariableElement ve : method.getParameters() ){
             builder.addParameter(TypeName.get(ve.asType()), ve.getSimpleName().toString());
@@ -483,11 +506,49 @@ public class EasyPrefsProcessor extends AbstractProcessor {
                     .build());
 
 
+            prefsClass.addMethod(MethodSpec.methodBuilder("getSharedPreferences")
+                    .returns(prefs())
+                    .addModifiers(Modifier.PUBLIC)
+                    .addStatement("return mSharedPreferences")
+                    .build());
+
+
             for ( Element item : schemaTE.getEnclosedElements() ) {
-                if (item.getKind() != ElementKind.METHOD){
+                EPItem methodAnnotation = item.getAnnotation(EPItem.class);
+                if (methodAnnotation == null){
+                    methodAnnotation = new EPItem(){
+                        @Override
+                        public Class<? extends Annotation> annotationType() {
+                            return EPItem.class;
+                        }
+
+                        @Override
+                        public String key() {
+                            return "";
+                        }
+
+                        @Override
+                        public long expiresIn() {
+                            return -1;
+                        }
+
+                        @Override
+                        public boolean exclude() {
+                            return false;
+                        }
+                    };
+                }
+
+                if (item.getKind() != ElementKind.METHOD || methodAnnotation.exclude()){
                     continue;
                 }
-                String itemName = item.getSimpleName().toString();
+                String key = methodAnnotation.key();
+                if (key.length() == 0){
+                    key = item.getSimpleName().toString();
+                }
+
+                long expiresIn = methodAnnotation.expiresIn();
+
                 ExecutableElement eMethod = (ExecutableElement) item;
 //                if( eMethod.getParameters().size() > 0 ){
 //                    error( "Your EasyPrefs schema methods cannot have parameters!" );
@@ -503,10 +564,10 @@ public class EasyPrefsProcessor extends AbstractProcessor {
                     prefsClass.addMethod(defaultMethod(eMethod));
                 }
 
-                prefsClass.addMethod(getMethod(eMethod, typeParameters));
-                prefsClass.addMethod(setMethod(eMethod));
-                prefsClass.addMethod(deleteMethod(eMethod));
-                prefsClass.addMethod(existsMethod(eMethod));
+                prefsClass.addMethod(getMethod(eMethod, typeParameters, key, expiresIn));
+                prefsClass.addMethod(setMethod(eMethod, key, expiresIn));
+                prefsClass.addMethod(deleteMethod(eMethod, key, expiresIn));
+                prefsClass.addMethod(existsMethod(eMethod, key, expiresIn));
 
             }
 
@@ -529,7 +590,7 @@ public class EasyPrefsProcessor extends AbstractProcessor {
 
     @Override
     public Set<String> getSupportedAnnotationTypes() {
-        return ImmutableSet.of(EasyPrefsSchema.class.getCanonicalName() );
+        return ImmutableSet.of(EasyPrefsSchema.class.getCanonicalName(), EPItem.class.getCanonicalName() );
     }
 
     @Override
